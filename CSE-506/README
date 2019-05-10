@@ -1,0 +1,236 @@
+#HW1 CSE506
+Encrypting files is very important nowadays, but many OSs do not support this feature natively (yet).
+As part of this assignment I have written code for creating a system call, 'sys_cpenc' which can encrypt/decrypt/copy the input file to an output file.
+
+#Prerequisites
+Before using the system call we need to set up the module.
+In the CSE506 folder run the following commands-
+> make clean
+> make
+> sh install_module.sh
+
+The commands above shall build and load the module.
+
+#Instructions to run
+The command to run the system call is-
+
+> ./xhw1 {-p PASSWORD} {-e|-d|-c} [-h help] inputFilePath outputFilePath
+
+The flag mean the following-
+-p : Password (Minimum length of Password - 6 characters)
+-e : Encrypt Input File
+-d : Decrypt Input File
+-c : Copy Input File
+-h : Help
+inputFile: Input File Path
+outputFile: Output File Path
+
+If the outputfile does not exist, the system call shall create one and store the data.
+
+Example-
+> ./xhw1 -p somepassword -e someinputfile.txt someoutputfile.txt
+
+The above command encrypts 'someinputfile.txt' with password 'somepassword' and stores the encrypted file in 'someoutputfile.txt'
+
+
+NOTE- It is not necessary to give -p flag for copy.
+
+#Functionalities
+1) Encrypt
+The system call can encrypt an input file and stores it in the output file against a password. 
+
+Example for encryption-
+> ./xhw1 -p somepassword -e inputFile.txt outputFile.txt
+
+The above command generates a 'sha1' hash for the password, which is stored in the header of the output file and uses CTR(AES) from cryptoApi(skcipher) for encryption. 
+
+2) Decrypt
+The system call can decrypt an encrypted input file and stores it in the output file against a password. 
+
+Example for decryption-
+>./xhw1 -p somepassword -d inputFile.txt outputFile.txt
+
+The above command first generates a 'sha1' hash for the password given and checks if the hash value matches with the one at the header, if it does, it proceeds to decrypt the file.
+
+3) Copy
+The system call can copy data from an inputfile and store it in another file as it is.
+
+Example for copy-
+
+>./xhw1 -p somepassword -c inputFile.txt outputFile.txt
+
+or 
+
+>./xhw1 -c inputFile.txt outputFile.txt
+
+Both the above commands shall work, as it is not necessary to give a password for copying.
+
+#Content
+The files and folders that are a part of this project are-
+
+## Makefile
+This file is use to generate a build and clean the build.
+There is a change made to the template of Makefile given to generate a hash.
+>   gcc -Wall -Werror -I$(INC)/generated/uapi -I$(INC)/uapi xhw1.c -o xhw1 -lssl -lcrypto
+
+## sys_cpenc.c
+This is the code for the system call which performs encryption/decryption/copy.
+
+Flow of the code-
+1) Receives an input with inputfile, outputfile, keybuf(password), keylen(length of key) and flag (for encryption/decryption/copy)
+2) Checks validity of all arguments.
+3) Generated a hash for the password for encryption/decryption.
+4) If encryption, it writes the hash at the head if the file.
+5) If decryption, it reads the preamble and compares it against the hash generated from the password. If they are not the same, it throws an error and exits the program.
+6) After the above checks, the data is read in chunks of at most the PAGE_SIZE and depending of the flag, it is either directly copied to output file or encrypted, decrypted and then copied to the outputfile.
+7) The remaining bytes which are lesser than PAGE_SIZE again follow the pattern in step 6, just in a smaller chunk which is it's size.
+
+## xhw1.c
+This is the user level program to call the systemcall. 
+
+Flow of code-
+1) Take Command line input from the user.
+2) Check if all inputs are given or not.
+3) Verify all inputs.
+4) Pass the input to systemcall.
+5) check if an error was thrown by the system call.
+6) Show the appropriate error number and return if code was a success of failure.
+
+## install_module.sh
+The above script helps load the module.
+
+## masterTestScript.sh
+The masterTestSrcipt.sh runs all the tests in TESTCASES folder.
+
+Flow of the code-
+1) Build the module
+2) Load the module
+3) Copy the 'xhw1' executable to the TESTCASES folder
+4) Run all testcases
+5) Returning stats of the testcases
+
+## kernel.config
+Has the data of all the modules that are in the kernel.
+NOTE-THIS IS NOT REQUIRED FOR THE SYSTEM CALL TO WORK
+
+## TESTCASES
+The TESTCASES folder holds Individual testcases written in shell, each checking for a different functionality.
+Some testcases are written for the systemcall to succeed and some are written to check if the systemcall throws an error in case of bad input.
+
+## README
+Readme has instructions to build and run the systemcall.
+It is written down in markdown format. 
+
+#Testing
+To test the above module there are a number of test scripts written which are controlled by the 'masterTestScript.sh'. The script calls the user level program 'xhw1' and tests both the user level program and system level call
+
+Each test script creates input/output/temp files on the fly and deletes them after completion.
+
+##Running Individual Test Cases
+If you do not want to use the masterTestScript.sh
+To run Individual test cases from the TESTFOLDER you need to 
+1) Build the module in the CSE506 folder
+2) copy 'xhw1' from the CSE506 folder to the TESTCASES folder
+3) Run the testcase you want to
+
+Example of the above flow- (currently in CSE506 folder)
+> make
+> cp xhw1 TESTCASES/
+> ./TESTCASES/test_LengthPassword.sh 
+> ./TESTCASES/test_EncryptDecrypt.sh
+
+##Adding Test Cases
+To add any Test Case, name the test case file with the prefix 'test_'
+
+##TestCases
+The Testcases check the following (currently)-
+
+1) Encryption Decryption with less data. (4 Bytes) 
+Desired result is that system call succeeds.
+
+2) Encryption Decryption with more data. (>PAGE_SIZE)
+Desired result is that system call succeeds.
+
+3) Copy functionality.
+Desired result is that system call succeeds.
+
+4) Giving incorrect password to decrypt encrypted file.
+Desired result is that system call fails.
+
+5) Giving incorrect path for input file.
+Desired result is that system call fails.
+
+6) Giving same input output file.
+Desired result is that system call fails.
+
+7) Giving output file name which doesn't exist.
+Desired result is that system call succeeds.
+
+8) Giving a password with length less than 6.
+Desired result is that system call fails.
+
+9) Giving input file with no read permission.
+Desired result is that system call fails.
+
+10) Giving output file with no write permission.
+Desired result is that system call fails.
+
+11) No password given for encryption.
+Desired result is that system call fails.
+
+12) No flags given.
+Desired result is that system call fails.
+
+13) Encrypt, Decrypt flag given at once.
+Desired result is that system call fails.
+
+14) Same flag given twice (User level check)
+Desired result is that system call fails.
+
+#Scope of Improvement
+1) The user gives the password in plain text, that could be altered.
+2) While the code written follows most guidelines and the scripts/checkpatch.pl file DOES NOT THROW any error when run against sys_cpenc.c, it does show some warnings.
+
+#References
+This assignment couldn't have been complete without the help from the Professor, TA's and online resources. Here is all that helped me with the project.
+
+1) Base Template of the modules - Professor Erez Zadok
+
+##xhw1.x-
+
+1) Check Permissions
+checks for user permissions has been referred from the following link and modified according to use case.
+    https://stackoverflow.com/questions/20238042/is-there-a-c-function-to-get-permissions-of-a-file  
+
+2) Error Codes
+All error numbers have been taken from here 
+    http://www-numi.fnal.gov/offline_software/srt_public_context/WebDocs/Errors/unix_system_errors.html
+
+
+3) Generating Hash (PasswordValidity)
+Source - 
+    https://www.openssl.org/docs/man1.1.0/man3/PKCS5_PBKDF2_HMAC_SHA1.html
+
+
+## sys_cpenc.c
+
+1) Encryption/Decryption
+struct skcipher_def and function encrypt_decrypt have been taken and altered according to the use case from the example given in the Crypto API Kernel Document - (EG-Code Example For Symmetric Key Cipher Operation)
+    https://kernel.readthedocs.io/en/sphinx-samples/crypto-API.html#code-examples
+
+2) Read and Write file
+    It has been altered to use vfs_read and vfs_write instead.
+    https://www3.cs.stonybrook.edu/~ezk/cse506-s19/hw1.txt
+
+3) preEncryptDecrypt
+
+    Referred https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h#L3473 for dentry and inode.
+
+4) File Validation
+File validation steps have been referred from -
+    (Linux doc) https://elixir.bootlin.com/linux/v4.5/source/drivers/md/md.c#L6280 and
+    (Linux Core Utils 'cp' function) https://github.com/coreutils/coreutils/blob/master/src/cp.c
+
+5) Generate Hash
+Generate Hash has been referred from the Linux Kernel Document. It is modified according to the use case.
+    https://elixir.bootlin.com/linux/v4.5/source/crypto/tcrypt.c#L958
